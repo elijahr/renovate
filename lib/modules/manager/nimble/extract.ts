@@ -1,0 +1,111 @@
+import { regEx } from '../../../util/regex.ts';
+import { GitTagsDatasource } from '../../datasource/git-tags/index.ts';
+import type { PackageDependency, PackageFileContent } from '../types.ts';
+
+export function parseRequiresItems(rawLine: string): string[] {
+  const items: string[] = [];
+  const regex = regEx('["\'](?<item>[^"\']+)["\']', 'g');
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(rawLine)) !== null) {
+    if (match.groups?.item) {
+      items.push(match.groups.item);
+    }
+  }
+  return items;
+}
+
+export function parseDependencyItem(item: string): {
+  depName: string;
+  currentValue: string;
+} {
+  const trimmed = item.trim();
+  // Strip feature flags like [gui]
+  const noFlags = trimmed.replace(regEx('\\[[^\\]]*\\]'), '').trim();
+
+  // Check for VCS ref: e.g. pkg#head, pkg#branch, pkg#commit
+  const hashIdx = noFlags.indexOf('#');
+  if (hashIdx !== -1) {
+    const depName = noFlags.slice(0, hashIdx).trim();
+    const vcsRef = noFlags.slice(hashIdx).trim();
+    return { depName, currentValue: vcsRef };
+  }
+
+  // Check for operator constraints: >=, <=, ==, !=, ^=, ~=, >, <, &
+  const opMatch = regEx('(?<op>[><=!~^&]+.*)$').exec(noFlags);
+  if (opMatch?.index && opMatch.index > 0) {
+    const depName = noFlags.slice(0, opMatch.index).trim();
+    const currentValue = opMatch[0].trim();
+    return { depName, currentValue };
+  }
+
+  // Bare package name with no version
+  return { depName: noFlags, currentValue: '' };
+}
+
+export function extractPackageFile(
+  content: string,
+  _packageFile?: string,
+): PackageFileContent | null {
+  if (!content) {
+    return null;
+  }
+
+  const deps: PackageDependency[] = [];
+  const lines = content.split(regEx('\\r?\\n'));
+  let inTaskBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Check if line begins or exits a task block
+    if (regEx('^task\\s+[a-zA-Z0-9_]+').test(trimmed)) {
+      inTaskBlock = true;
+      continue;
+    }
+
+    // Unindented non-empty line exits task block
+    if (inTaskBlock && line.length > 0 && !regEx('^\\s').test(line)) {
+      inTaskBlock = false;
+    }
+
+    if (inTaskBlock) {
+      continue;
+    }
+
+    // Ignore commented lines
+    if (trimmed.startsWith('#')) {
+      continue;
+    }
+
+    // Look for requires statements
+    if (regEx('^requires\\s+').test(trimmed)) {
+      const items = parseRequiresItems(line);
+      for (const item of items) {
+        const { depName, currentValue } = parseDependencyItem(item);
+        if (!depName) {
+          continue;
+        }
+
+        const isCompiler = depName.toLowerCase() === 'nim';
+        const dep: PackageDependency = {
+          depName,
+          currentValue: currentValue || undefined,
+          datasource: GitTagsDatasource.id,
+          depType: isCompiler ? 'compiler' : 'dependencies',
+          replaceString: item,
+        };
+
+        deps.push(dep);
+      }
+    }
+  }
+
+  if (deps.length === 0) {
+    return null;
+  }
+
+  return {
+    deps,
+    lockFiles: ['nimble.lock', 'atlas.lock'],
+  };
+}
