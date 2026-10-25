@@ -1,0 +1,68 @@
+name: Renovate Runner
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Every Monday at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (empty for full live run, or extract / lookup / full)'
+        required: false
+        default: ''
+      repo_filter:
+        description: 'Target repository or autodiscover filter (e.g. elijahr/lockfree or elijahr/*)'
+        required: false
+        default: ''
+      log_level:
+        description: 'Logging level (info / debug / trace)'
+        required: false
+        default: 'info'
+
+concurrency:
+  group: renovate-runner
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: Run Renovate Nimble
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout elijahr/renovate
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile Renovate
+        run: pnpm compile:ts
+
+      - name: Execute Renovate Runner
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
+          LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
+        run: |
+          ARGS=()
+          if [ -n "${{ github.event.inputs.dry_run }}" ]; then
+            ARGS+=(--dry-run="${{ github.event.inputs.dry_run }}")
+          fi
+
+          TARGET="${{ github.event.inputs.repo_filter }}"
+          if [ -n "$TARGET" ]; then
+            if [[ "$TARGET" == *"*"* ]]; then
+              ARGS+=(--autodiscover=true --autodiscover-filter="$TARGET")
+              node dist/renovate.js "${ARGS[@]}"
+            else
+              node dist/renovate.js "${ARGS[@]}" "$TARGET"
+            fi
+          else
+            # Default: run against configured repos
+            node dist/renovate.js "${ARGS[@]}" --autodiscover=true --autodiscover-filter="elijahr/*,axiomantic/*"
+          fi
