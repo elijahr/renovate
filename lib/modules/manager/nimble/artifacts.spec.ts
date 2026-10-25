@@ -57,6 +57,58 @@ describe('modules/manager/nimble/artifacts', () => {
     expect(updated.packages.chronos.version).toBe('4.0.0');
   });
 
+  it('updates nimble.lock and atlas.lock with newDigest', async () => {
+    const mockNimbleLock = JSON.stringify({
+      version: 1,
+      packages: {
+        chronos: {
+          version: '3.0.0',
+          vcsRevision: 'oldsha',
+        },
+      },
+    });
+    const mockAtlasLock = JSON.stringify({
+      packages: {
+        chronos: {
+          version: '3.0.0',
+          commit: 'oldsha',
+        },
+      },
+    });
+
+    fs.readLocalFile.mockImplementation((file: string) => {
+      if (file === 'nimble.lock') {
+        return Promise.resolve(mockNimbleLock);
+      }
+      if (file === 'atlas.lock') {
+        return Promise.resolve(mockAtlasLock);
+      }
+      return Promise.resolve(null);
+    });
+
+    const res = await updateArtifacts({
+      packageFileName: 'project.nimble',
+      updatedDeps: [
+        {
+          depName: 'chronos',
+          newValue: '>= 4.0.0',
+          newDigest: 'newsha123',
+        },
+      ],
+      newPackageFileContent: '',
+      config: partial<UpdateArtifactsConfig>({}),
+    });
+
+    expect(res).toHaveLength(2);
+    const nimbleUpdated = JSON.parse(res?.[0].file.contents as string);
+    expect(nimbleUpdated.packages.chronos.version).toBe('4.0.0');
+    expect(nimbleUpdated.packages.chronos.vcsRevision).toBe('newsha123');
+
+    const atlasUpdated = JSON.parse(res?.[1].file.contents as string);
+    expect(atlasUpdated.packages.chronos.version).toBe('4.0.0');
+    expect(atlasUpdated.packages.chronos.commit).toBe('newsha123');
+  });
+
   it('handles invalid json gracefully in nimble.lock', async () => {
     fs.readLocalFile.mockImplementation((file: string) => {
       if (file === 'nimble.lock') {
