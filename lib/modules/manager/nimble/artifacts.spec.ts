@@ -1,4 +1,5 @@
 import { fs, partial } from '~test/util.ts';
+import type { FileAddition } from '../../../util/git/types.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
 
@@ -52,8 +53,9 @@ describe('modules/manager/nimble/artifacts', () => {
     });
 
     expect(res).toHaveLength(1);
-    expect(res?.[0].file.path).toBe('nimble.lock');
-    const updated = JSON.parse(res?.[0].file.contents as string);
+    expect(res![0].file?.path).toBe('nimble.lock');
+    const file = res![0].file as FileAddition;
+    const updated = JSON.parse(file.contents as string);
     expect(updated.packages.chronos.version).toBe('4.0.0');
   });
 
@@ -100,11 +102,13 @@ describe('modules/manager/nimble/artifacts', () => {
     });
 
     expect(res).toHaveLength(2);
-    const nimbleUpdated = JSON.parse(res?.[0].file.contents as string);
+    const nimbleFile = res![0].file as FileAddition;
+    const nimbleUpdated = JSON.parse(nimbleFile.contents as string);
     expect(nimbleUpdated.packages.chronos.version).toBe('4.0.0');
     expect(nimbleUpdated.packages.chronos.vcsRevision).toBe('newsha123');
 
-    const atlasUpdated = JSON.parse(res?.[1].file.contents as string);
+    const atlasFile = res![1].file as FileAddition;
+    const atlasUpdated = JSON.parse(atlasFile.contents as string);
     expect(atlasUpdated.packages.chronos.version).toBe('4.0.0');
     expect(atlasUpdated.packages.chronos.commit).toBe('newsha123');
   });

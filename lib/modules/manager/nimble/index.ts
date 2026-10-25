@@ -7,6 +7,7 @@ export { updateDependency } from './update.ts';
 
 export const supportsLockFileMaintenance = true;
 export const lockFileNames = ['nimble.lock', 'atlas.lock'];
+export const lockFileMaintenanceIsDelegatedToPackageManager = false;
 
 export const displayName = 'nimble';
 export const url = 'https://github.com/nim-lang/nimble';

@@ -54,6 +54,7 @@ export const CategoryNames: Record<Category, string> = {
   java: 'Java',
   js: 'JavaScript',
   kubernetes: 'Kubernetes',
+  nim: 'Nim',
   node: 'Node.js',
   perl: 'Perl',
   php: 'PHP',
