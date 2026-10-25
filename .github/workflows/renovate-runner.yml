@@ -18,6 +18,9 @@ on:
         required: false
         default: 'info'
 
+permissions:
+  contents: read
+
 concurrency:
   group: renovate-runner
   cancel-in-progress: false
@@ -28,18 +31,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout elijahr/renovate
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 22
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          os: ${{ runner.os }}
+          save-cache: true
 
       - name: Compile Renovate
         run: pnpm compile:ts
@@ -47,20 +48,21 @@ jobs:
       - name: Execute Renovate Runner
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
-          LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPO_FILTER: ${{ inputs.repo_filter }}
         run: |
           ARGS=()
-          if [ -n "${{ github.event.inputs.dry_run }}" ]; then
-            ARGS+=(--dry-run="${{ github.event.inputs.dry_run }}")
+          if [ -n "$DRY_RUN" ]; then
+            ARGS+=(--dry-run="$DRY_RUN")
           fi
 
-          TARGET="${{ github.event.inputs.repo_filter }}"
-          if [ -n "$TARGET" ]; then
-            if [[ "$TARGET" == *"*"* ]]; then
-              ARGS+=(--autodiscover=true --autodiscover-filter="$TARGET")
+          if [ -n "$REPO_FILTER" ]; then
+            if [[ "$REPO_FILTER" == *"*"* ]]; then
+              ARGS+=(--autodiscover=true --autodiscover-filter="$REPO_FILTER")
               node dist/renovate.js "${ARGS[@]}"
             else
-              node dist/renovate.js "${ARGS[@]}" "$TARGET"
+              node dist/renovate.js "${ARGS[@]}" "$REPO_FILTER"
             fi
           else
             # Default: run against configured repos
