@@ -124,5 +124,37 @@ task test, "Run tests":
       expect(res?.deps).toHaveLength(1);
       expect(res?.deps[0].depName).toBe('nim');
     });
+
+    it('ignores manifests inside nimbledeps, deps, and nimcache', () => {
+      const content = 'requires "zippy >= 0.1.0"';
+      expect(
+        extractPackageFile(content, 'nimbledeps/pkgs2/foo/foo.nimble'),
+      ).toBeNull();
+      expect(extractPackageFile(content, 'deps/foo/foo.nimble')).toBeNull();
+      expect(extractPackageFile(content, 'src/deps/foo/foo.nimble')).toBeNull();
+      expect(extractPackageFile(content, 'nimcache/foo.nimble')).toBeNull();
+      expect(extractPackageFile(content, '.nimcache/foo.nimble')).toBeNull();
+      expect(
+        extractPackageFile(content, 'packages/foo/foo.nimble'),
+      ).not.toBeNull();
+    });
+
+    it('sets official repository for nim compiler and direct git URLs', () => {
+      const content = `
+requires "nim >= 2.0.0"
+requires "https://github.com/guzba/zippy >= 0.10.4"
+      `;
+      const res = extractPackageFile(content, 'foo.nimble');
+      expect(res?.deps).toHaveLength(2);
+      expect(res?.deps[0]).toMatchObject({
+        depName: 'nim',
+        packageName: 'https://github.com/nim-lang/Nim',
+        depType: 'compiler',
+      });
+      expect(res?.deps[1]).toMatchObject({
+        depName: 'zippy',
+        packageName: 'https://github.com/guzba/zippy',
+      });
+    });
   });
 });

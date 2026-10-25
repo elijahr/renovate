@@ -42,11 +42,32 @@ export function parseDependencyItem(item: string): {
   return { depName: noFlags, currentValue: '' };
 }
 
+const IGNORED_PATH_SEGMENTS = [
+  '/nimbledeps/',
+  '/deps/',
+  '/nimcache/',
+  '/.nimcache/',
+];
+
+export function isIgnoredPath(packageFile?: string): boolean {
+  if (!packageFile) {
+    return false;
+  }
+  const normalized = packageFile.replace(regEx('\\\\', 'g'), '/');
+  return (
+    IGNORED_PATH_SEGMENTS.some((seg) => normalized.includes(seg)) ||
+    normalized.startsWith('nimbledeps/') ||
+    normalized.startsWith('deps/') ||
+    normalized.startsWith('nimcache/') ||
+    normalized.startsWith('.nimcache/')
+  );
+}
+
 export function extractPackageFile(
   content: string,
-  _packageFile?: string,
+  packageFile?: string,
 ): PackageFileContent | null {
-  if (!content) {
+  if (!content || isIgnoredPath(packageFile)) {
     return null;
   }
 
@@ -87,8 +108,27 @@ export function extractPackageFile(
         }
 
         const isCompiler = depName.toLowerCase() === 'nim';
+        let packageName: string | undefined;
+        let cleanName = depName;
+
+        if (isCompiler) {
+          packageName = 'https://github.com/nim-lang/Nim';
+        } else if (
+          depName.startsWith('https://') ||
+          depName.startsWith('http://') ||
+          depName.startsWith('git@')
+        ) {
+          packageName = depName;
+          const urlParts = depName.split('/');
+          const lastPart = urlParts.at(-1)?.replace(regEx('\\.git$'), '');
+          if (lastPart) {
+            cleanName = lastPart;
+          }
+        }
+
         const dep: PackageDependency = {
-          depName,
+          depName: cleanName,
+          packageName,
           currentValue: currentValue || undefined,
           datasource: GitTagsDatasource.id,
           depType: isCompiler ? 'compiler' : 'dependencies',

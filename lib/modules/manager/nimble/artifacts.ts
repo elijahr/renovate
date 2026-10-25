@@ -35,10 +35,11 @@ export async function updateArtifacts({
           const depName = dep.depName;
           const newVersion = dep.newValue ?? dep.newVersion;
           if (depName && newVersion && lock.packages?.[depName]) {
-            lock.packages[depName].version = newVersion.replace(
-              versionPrefixRegex,
-              '',
-            );
+            const pkgEntry = lock.packages[depName] as Record<string, unknown>;
+            pkgEntry.version = newVersion.replace(versionPrefixRegex, '');
+            if (dep.newDigest) {
+              pkgEntry.vcsRevision = dep.newDigest;
+            }
             changed = true;
           }
         }
@@ -71,10 +72,11 @@ export async function updateArtifacts({
           const depName = dep.depName;
           const newVersion = dep.newValue ?? dep.newVersion;
           if (depName && newVersion && lock.packages?.[depName]) {
-            lock.packages[depName].version = newVersion.replace(
-              versionPrefixRegex,
-              '',
-            );
+            const pkgEntry = lock.packages[depName] as Record<string, unknown>;
+            pkgEntry.version = newVersion.replace(versionPrefixRegex, '');
+            if (dep.newDigest) {
+              pkgEntry.commit = dep.newDigest;
+            }
             changed = true;
           }
         }
