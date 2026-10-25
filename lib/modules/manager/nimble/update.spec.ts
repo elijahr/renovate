@@ -64,4 +64,25 @@ requires "checksums >= 0.1.0"
 
     expect(res).toBe("requires 'yaml ^= 2.2.0'");
   });
+
+  it('does not mutate commented lines matching replaceString', () => {
+    const fileContent = `# requires "zippy >= 0.10.4"\nrequires "zippy >= 0.10.4"`;
+
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: '0.11.0',
+      replaceString: 'zippy >= 0.10.4',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe(
+      `# requires "zippy >= 0.10.4"\nrequires "zippy >= 0.11.0"`,
+    );
+  });
 });

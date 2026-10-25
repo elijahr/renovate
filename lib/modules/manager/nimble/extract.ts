@@ -8,7 +8,17 @@ export function parseRequiresItems(rawLine: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = regex.exec(rawLine)) !== null) {
     if (match.groups?.item) {
-      items.push(match.groups.item);
+      const rawItem = match.groups.item;
+      if (rawItem.includes(',')) {
+        for (const subItem of rawItem.split(',')) {
+          const trimmed = subItem.trim();
+          if (trimmed) {
+            items.push(trimmed);
+          }
+        }
+      } else {
+        items.push(rawItem);
+      }
     }
   }
   return items;
@@ -74,6 +84,7 @@ export function extractPackageFile(
   const deps: PackageDependency[] = [];
   const lines = content.split(regEx('\\r?\\n'));
   let inTaskBlock = false;
+  let inRequiresContinuation = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -81,6 +92,7 @@ export function extractPackageFile(
     // Check if line begins or exits a task block
     if (regEx('^task\\s+[a-zA-Z0-9_]+').test(trimmed)) {
       inTaskBlock = true;
+      inRequiresContinuation = false;
       continue;
     }
 
@@ -98,8 +110,8 @@ export function extractPackageFile(
       continue;
     }
 
-    // Look for requires statements
-    if (regEx('^requires\\s+').test(trimmed)) {
+    const isRequires = regEx('^requires\\s+').test(trimmed);
+    if (isRequires || inRequiresContinuation) {
       const items = parseRequiresItems(line);
       for (const item of items) {
         const { depName, currentValue } = parseDependencyItem(item);
@@ -137,6 +149,7 @@ export function extractPackageFile(
 
         deps.push(dep);
       }
+      inRequiresContinuation = trimmed.endsWith(',');
     }
   }
 
