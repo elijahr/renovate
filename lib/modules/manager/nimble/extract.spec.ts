@@ -156,5 +156,21 @@ requires "https://github.com/guzba/zippy >= 0.10.4"
         packageName: 'https://github.com/guzba/zippy',
       });
     });
+
+    it('extracts multiline requires continuations and comma-separated items', () => {
+      const content = `
+requires "nim >= 2.0.0",
+         "checksums >= 0.1.0",
+         "zippy >= 0.10.0, jester >= 0.5.0"
+      `;
+      const res = extractPackageFile(content, 'foo.nimble');
+      expect(res?.deps).toHaveLength(4);
+      expect(res?.deps.map((d) => d.depName)).toEqual([
+        'nim',
+        'checksums',
+        'zippy',
+        'jester',
+      ]);
+    });
   });
 });

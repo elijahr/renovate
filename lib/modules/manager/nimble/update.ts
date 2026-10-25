@@ -27,6 +27,25 @@ export function updateDependency({
       updatedItem = `${depName} >= ${newValue}`;
     }
 
+    const lines = fileContent.split(regEx('\\r?\\n'));
+    let replaced = false;
+    const newLines = lines.map((line) => {
+      const trimmed = line.trim();
+      if (
+        !replaced &&
+        !trimmed.startsWith('#') &&
+        line.includes(replaceString)
+      ) {
+        replaced = true;
+        return line.replace(replaceString, updatedItem);
+      }
+      return line;
+    });
+
+    if (replaced) {
+      return newLines.join('\n');
+    }
+
     return fileContent.replace(replaceString, updatedItem);
   }
 
