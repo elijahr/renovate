@@ -18,6 +18,13 @@ describe('modules/manager/nimble/extract', () => {
       const items = parseRequiresItems("requires 'nim >= 2.0.0'");
       expect(items).toEqual(['nim >= 2.0.0']);
     });
+
+    it('skips empty elements in comma-separated strings', () => {
+      const items = parseRequiresItems(
+        'requires "zippy >= 0.10.4, , checksums"',
+      );
+      expect(items).toEqual(['zippy >= 0.10.4', 'checksums']);
+    });
   });
 
   describe('parseDependencyItem', () => {
@@ -80,7 +87,7 @@ license     = "MIT"
       expect(extractPackageFile(content)).toBeNull();
     });
 
-    it('extracts dependencies from real-world nimble manifest', () => {
+    it('extracts dependencies from real-world nimble manifest including bare packages', () => {
       const content = `
 # Package
 version       = "0.1.0"
@@ -92,6 +99,7 @@ license       = "MIT"
 requires "nim >= 2.0.0"
 requires "zippy >= 0.10.4", "checksums >= 0.1.0"
 requires "ws#head"
+requires "posix_utils"
 
 task test, "Run tests":
   exec "nim c -r tests/test_all.nim"
@@ -99,7 +107,7 @@ task test, "Run tests":
 
       const res = extractPackageFile(content);
       expect(res).not.toBeNull();
-      expect(res?.deps).toHaveLength(4);
+      expect(res?.deps).toHaveLength(5);
 
       expect(res?.deps[0]).toMatchObject({
         depName: 'nim',
@@ -122,6 +130,12 @@ task test, "Run tests":
       expect(res?.deps[3]).toMatchObject({
         depName: 'ws',
         currentValue: '#head',
+        depType: 'dependencies',
+      });
+
+      expect(res?.deps[4]).toMatchObject({
+        depName: 'posix_utils',
+        currentValue: undefined,
         depType: 'dependencies',
       });
     });
@@ -153,7 +167,7 @@ requires "zippy >= 0.10.4"
     });
 
     it('ignores manifests inside nimbledeps, deps, and nimcache', () => {
-      const content = 'requires "zippy >= 0.1.0"';
+      const content = 'requires "zippy >= 0.10.4"';
       expect(
         extractPackageFile(content, 'nimbledeps/pkgs2/foo/foo.nimble'),
       ).toBeNull();
@@ -166,13 +180,16 @@ requires "zippy >= 0.10.4"
       ).not.toBeNull();
     });
 
-    it('sets official repository for nim compiler and direct git URLs', () => {
+    it('sets official repository for nim compiler and direct git URLs (https, http, git@)', () => {
       const content = `
 requires "nim >= 2.0.0"
 requires "https://github.com/guzba/zippy >= 0.10.4"
+requires "http://github.com/nim-lang/packages >= 1.0.0"
+requires "git@github.com:nim-lang/checksums.git >= 0.1.0"
+requires "https://github.com/nim-lang/trailing/"
       `;
       const res = extractPackageFile(content, 'foo.nimble');
-      expect(res?.deps).toHaveLength(2);
+      expect(res?.deps).toHaveLength(5);
       expect(res?.deps[0]).toMatchObject({
         depName: 'nim',
         packageName: 'https://github.com/nim-lang/Nim',
@@ -181,6 +198,18 @@ requires "https://github.com/guzba/zippy >= 0.10.4"
       expect(res?.deps[1]).toMatchObject({
         depName: 'zippy',
         packageName: 'https://github.com/guzba/zippy',
+      });
+      expect(res?.deps[2]).toMatchObject({
+        depName: 'packages',
+        packageName: 'http://github.com/nim-lang/packages',
+      });
+      expect(res?.deps[3]).toMatchObject({
+        depName: 'checksums',
+        packageName: 'git@github.com:nim-lang/checksums.git',
+      });
+      expect(res?.deps[4]).toMatchObject({
+        depName: 'https://github.com/nim-lang/trailing/',
+        packageName: 'https://github.com/nim-lang/trailing/',
       });
     });
 
