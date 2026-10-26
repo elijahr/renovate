@@ -1,0 +1,70 @@
+name: Renovate Runner
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Every Monday at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (empty for full live run, or extract / lookup / full)'
+        required: false
+        default: ''
+      repo_filter:
+        description: 'Target repository or autodiscover filter (e.g. elijahr/lockfree or elijahr/*)'
+        required: false
+        default: ''
+      log_level:
+        description: 'Logging level (info / debug / trace)'
+        required: false
+        default: 'info'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate-runner
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: Run Renovate Nimble
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout elijahr/renovate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 22
+          os: ${{ runner.os }}
+          save-cache: true
+
+      - name: Compile Renovate
+        run: pnpm compile:ts
+
+      - name: Execute Renovate Runner
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || github.token }}
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPO_FILTER: ${{ inputs.repo_filter }}
+        run: |
+          ARGS=()
+          if [ -n "$DRY_RUN" ]; then
+            ARGS+=(--dry-run="$DRY_RUN")
+          fi
+
+          if [ -n "$REPO_FILTER" ]; then
+            if [[ "$REPO_FILTER" == *"*"* ]]; then
+              ARGS+=(--autodiscover=true --autodiscover-filter="$REPO_FILTER")
+              node dist/renovate.js "${ARGS[@]}"
+            else
+              node dist/renovate.js "${ARGS[@]}" "$REPO_FILTER"
+            fi
+          else
+            # Default: run against configured repos
+            node dist/renovate.js "${ARGS[@]}" --autodiscover=true --autodiscover-filter="elijahr/*,axiomantic/*"
+          fi
