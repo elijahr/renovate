@@ -56,11 +56,28 @@ describe('modules/manager/nimble/extract', () => {
         currentValue: '>= 1.0.0',
       });
     });
+
+    it('returns empty depName for blank or whitespace string', () => {
+      expect(parseDependencyItem('   ')).toEqual({
+        depName: '',
+        currentValue: '',
+      });
+    });
   });
 
   describe('extractPackageFile', () => {
     it('returns null on empty content', () => {
       expect(extractPackageFile('')).toBeNull();
+    });
+
+    it('returns null when manifest has content but no dependencies', () => {
+      const content = `
+version     = "1.0.0"
+author      = "Someone"
+description = "A package with no deps"
+license     = "MIT"
+      `;
+      expect(extractPackageFile(content)).toBeNull();
     });
 
     it('extracts dependencies from real-world nimble manifest', () => {
@@ -109,7 +126,7 @@ task test, "Run tests":
       });
     });
 
-    it('ignores requires inside task blocks', () => {
+    it('ignores requires inside task blocks and recovers on unindented line', () => {
       const content = `
 version = "1.0.0"
 requires "nim >= 2.0.0"
@@ -117,12 +134,22 @@ requires "nim >= 2.0.0"
 task test, "Run tests":
   echo "requires inside task block should be ignored"
   exec "echo requires not real"
+
+requires "zippy >= 0.10.4"
       `;
 
       const res = extractPackageFile(content);
       expect(res).not.toBeNull();
-      expect(res?.deps).toHaveLength(1);
+      expect(res?.deps).toHaveLength(2);
       expect(res?.deps[0].depName).toBe('nim');
+      expect(res?.deps[1].depName).toBe('zippy');
+    });
+
+    it('skips empty or whitespace-only items in requires declarations', () => {
+      const content = 'requires "", "   ", "[cli]", "zippy >= 0.10.4"';
+      const res = extractPackageFile(content);
+      expect(res?.deps).toHaveLength(1);
+      expect(res?.deps[0].depName).toBe('zippy');
     });
 
     it('ignores manifests inside nimbledeps, deps, and nimcache', () => {

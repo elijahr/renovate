@@ -85,4 +85,76 @@ requires "checksums >= 0.1.0"
       `# requires "zippy >= 0.10.4"\nrequires "zippy >= 0.11.0"`,
     );
   });
+
+  it('returns unchanged fileContent when newValue is undefined or empty', () => {
+    const fileContent = 'requires "zippy >= 0.10.4"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: '',
+      replaceString: 'zippy >= 0.10.4',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe(fileContent);
+  });
+
+  it('synthesizes updatedItem when replaceString does not contain currentValue', () => {
+    const fileContent = 'requires "zippy"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '',
+      newValue: '0.11.0',
+      replaceString: 'zippy',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('requires "zippy >= 0.11.0"');
+  });
+
+  it('falls back to regex matching when replaceString is not in fileContent', () => {
+    const fileContent = 'requires "zippy >= 0.10.4"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: '0.11.0',
+      replaceString: 'nonexistent-string',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('requires "zippy >= 0.11.0"');
+  });
+
+  it('falls back to replace when replaceString is only in a commented line', () => {
+    const fileContent = '# requires "zippy >= 0.10.4"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: '0.11.0',
+      replaceString: 'zippy >= 0.10.4',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('# requires "zippy >= 0.11.0"');
+  });
 });

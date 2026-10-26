@@ -49,13 +49,14 @@ export function updateDependency({
     return fileContent.replace(replaceString, updatedItem);
   }
 
-  // Fallback: line replacement matching quoted package declaration
-  const fallbackRegex = regEx(
-    `(?<quote>["'])${depName}(?<rest>\\s+[^"']*)?\\k<quote>`,
-    'g',
-  );
-  return fileContent.replace(
-    fallbackRegex,
-    `$<quote>${depName} >= ${newValue}$<quote>`,
-  );
+  // Fallback: replacement matching double or single quoted package declaration
+  return fileContent
+    .replace(
+      regEx(`"${depName}(?:\\s+[^"]*)?"`, 'g'),
+      `"${depName} >= ${newValue}"`,
+    )
+    .replace(
+      regEx(`'${depName}(?:\\s+[^']*)?'`, 'g'),
+      `'${depName} >= ${newValue}'`,
+    );
 }
