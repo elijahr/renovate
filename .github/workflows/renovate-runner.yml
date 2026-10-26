@@ -47,7 +47,7 @@ jobs:
 
       - name: Execute Renovate Runner
         env:
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || github.token }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPO_FILTER: ${{ inputs.repo_filter }}
