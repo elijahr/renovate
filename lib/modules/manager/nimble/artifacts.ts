@@ -19,7 +19,7 @@ export async function updateArtifacts({
   }
 
   const results: UpdateArtifactsResult[] = [];
-  const versionPrefixRegex = regEx('^[><=!~^&]+\\s*');
+  const versionPrefixRegex = regEx('^[><=!~^&]*v?\\s*');
 
   // 1. Check for nimble.lock
   const nimbleLockPath = getSiblingFileName(packageFileName, 'nimble.lock');
