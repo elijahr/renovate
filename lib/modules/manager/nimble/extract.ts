@@ -4,23 +4,17 @@ import type { PackageDependency, PackageFileContent } from '../types.ts';
 
 export function parseRequiresItems(rawLine: string): string[] {
   const items: string[] = [];
-  const regex = regEx('["\'](?<item>[^"\']*)["\']', 'g');
+  const regex = regEx('["\']([^"\']*)["\']', 'g');
   let match: RegExpExecArray | null;
   while ((match = regex.exec(rawLine)) !== null) {
-    if (match.groups?.item !== undefined) {
-      const rawItem = match.groups.item.trim();
-      if (!rawItem) {
-        continue;
-      }
-      if (rawItem.includes(',')) {
-        for (const subItem of rawItem.split(',')) {
-          const trimmed = subItem.trim();
-          if (trimmed) {
-            items.push(trimmed);
-          }
-        }
-      } else {
-        items.push(rawItem);
+    const rawItem = match[1].trim();
+    if (!rawItem) {
+      continue;
+    }
+    for (const subItem of rawItem.split(',')) {
+      const trimmed = subItem.trim();
+      if (trimmed) {
+        items.push(trimmed);
       }
     }
   }

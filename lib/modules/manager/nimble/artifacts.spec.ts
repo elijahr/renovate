@@ -12,17 +12,27 @@ describe('modules/manager/nimble/artifacts', () => {
     );
   });
 
-  it('returns null if no updatedDeps', async () => {
-    const res = await updateArtifacts({
-      packageFileName: 'project.nimble',
-      updatedDeps: [],
-      newPackageFileContent: '',
-      config: partial<UpdateArtifactsConfig>({}),
-    });
-    expect(res).toBeNull();
+  it('returns null if updatedDeps is undefined or empty', async () => {
+    await expect(
+      updateArtifacts({
+        packageFileName: 'project.nimble',
+        updatedDeps: [],
+        newPackageFileContent: '',
+        config: partial<UpdateArtifactsConfig>({}),
+      }),
+    ).resolves.toBeNull();
+
+    await expect(
+      updateArtifacts({
+        packageFileName: 'project.nimble',
+        updatedDeps: undefined as never,
+        newPackageFileContent: '',
+        config: partial<UpdateArtifactsConfig>({}),
+      }),
+    ).resolves.toBeNull();
   });
 
-  it('updates nimble.lock when dependency changes', async () => {
+  it('updates nimble.lock when dependency changes without digest', async () => {
     const mockLock = JSON.stringify({
       version: 1,
       packages: {
@@ -57,6 +67,7 @@ describe('modules/manager/nimble/artifacts', () => {
     const file = res![0].file as FileAddition;
     const updated = JSON.parse(file.contents as string);
     expect(updated.packages.chronos.version).toBe('4.0.0');
+    expect(updated.packages.chronos.vcsRevision).toBe('abc1234');
   });
 
   it('updates nimble.lock and atlas.lock with newDigest and newVersion fallback', async () => {
@@ -113,13 +124,13 @@ describe('modules/manager/nimble/artifacts', () => {
     expect(atlasUpdated.packages.chronos.commit).toBe('newsha123');
   });
 
-  it('handles invalid json gracefully in nimble.lock and atlas.lock', async () => {
+  it('handles invalid json or non-object packages gracefully', async () => {
     fs.readLocalFile.mockImplementation((file: string) => {
       if (file === 'nimble.lock') {
-        return Promise.resolve('invalid json');
+        return Promise.resolve('not-json');
       }
       if (file === 'atlas.lock') {
-        return Promise.resolve('corrupt {json');
+        return Promise.resolve('{"version": 1}');
       }
       return Promise.resolve(null);
     });
@@ -139,7 +150,7 @@ describe('modules/manager/nimble/artifacts', () => {
     expect(res).toBeNull();
   });
 
-  it('skips lockfile update if updated dependency is not present in lockfile', async () => {
+  it('skips lockfile update if depName or version is missing or dep is not in lockfile', async () => {
     const mockNimbleLock = JSON.stringify({
       version: 1,
       packages: {
@@ -160,8 +171,16 @@ describe('modules/manager/nimble/artifacts', () => {
       packageFileName: 'project.nimble',
       updatedDeps: [
         {
-          depName: 'chronos',
+          depName: '',
           newValue: '4.0.0',
+        },
+        {
+          depName: 'chronos',
+          newValue: '',
+        },
+        {
+          depName: 'missingpkg',
+          newValue: '1.0.0',
         },
       ],
       newPackageFileContent: '',
