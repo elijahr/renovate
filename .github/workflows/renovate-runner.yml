@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js & dependencies
         uses: ./.github/actions/setup-node
         with:
-          node-version: 22
+          node-version: 24
           os: ${{ runner.os }}
           save-cache: true
 
