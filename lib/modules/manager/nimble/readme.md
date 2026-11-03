@@ -1,23 +1,42 @@
-Extracts dependencies from Nimble (`*.nimble`) package manifest files and updates lockfiles (`nimble.lock` and `atlas.lock`).
+# Nimble Manager for Renovate
 
-### File Matching
+Renovate supports updating dependencies declared in [Nimble](https://github.com/nim-lang/nimble) package manifests (`*.nimble`).
 
-Renovate detects Nimble dependencies in:
+## File Matching
 
-- Files matching `(^|/)[^/]+\.nimble$` (e.g. `mypackage.nimble`)
-- Lockfiles matching `(^|/)nimble\.lock$` (v1 and v2 formats)
-- Atlas workspace lockfiles matching `(^|/)atlas\.lock$`
+By default, Renovate scans for files matching `/(^|\/)[^/]+\.nimble$/`.
 
-Renovate ignores vendor directories and local dependency caches matching:
+## Supported Dependencies
 
-- `(^|/)nimcache/`
-- `(^|/)nimbledeps/`
-- `(^|/)\.nimble/`
-- `(^|/)deps/`
+Nimble manifests declare dependencies via `requires`:
 
-### Features and Capabilities
+```nim
+requires "nim >= 1.6.0"
+requires "chronos >= 3.0.0"
+requires "https://github.com/status-im/nim-stew#head"
+requires "cligen >= 1.5.0", "yaml >= 0.4.0"
+```
 
-- **Manifest Parsing**: Extracts package requirements from `requires` statements in `*.nimble` files, including single-line, multi-line continuations, and comma-separated dependency lists.
-- **Lockfile Maintenance**: Automatically updates corresponding entries in `nimble.lock` (updating `version`, `vcsRevision`, `url`, and checksums) and `atlas.lock`.
-- **Registry & Git Support**: Resolves canonical package names via the official Nimble package directory (`nimble-packages`) and Git-hosted dependencies (`github`, `gitlab`, `sourcehut`).
-- **Version Ranges & Revisions**: Supports semver and loose versions, version constraint operators (`==`, `>=`, `<=`, `~=`, `>`, `<`), Git commit SHA pins, and branch references (`#head`).
+Renovate extracts:
+
+- Standard Nimble dependencies with SemVer constraint ranges (`>=`, `<=`, `==`, `!=`, `^=`, `~=`, `>`, `<`, `&`)
+- Direct Git URL dependencies (`https://...`, `http://...`, `git@...`)
+- VCS reference pins (`#head`, `#branch`, `#commit`)
+- Feature flag dependencies (`pkg[ssl] >= 1.0.0`)
+- Multi-line continuation declarations
+- Compiler dependencies (`requires "nim >= 2.0.0"`)
+
+## Package Name & URL Resolution Hierarchy
+
+Because `.nimble` files typically specify bare package names (such as `"chronos"`), Renovate uses a multi-tier resolution pipeline to find canonical Git repository URLs:
+
+1. **Companion Lockfiles (Tier 1)**: If a sibling `nimble.lock` or `atlas.lock` exists in the same directory, Renovate extracts the package's Git repository URL directly from the lockfile.
+2. **Official Nim Package Registry (Tier 2)**: Renovate queries the official Nim package registry (`https://raw.githubusercontent.com/nim-lang/packages/master/packages.json`) and caches results in `packageCache` for 24 hours under the `datasource-nimble-packages` namespace. Package aliases are resolved up to 3 hops with circular redirect protection.
+3. **Graceful Fallback (Tier 3)**: If the registry is unreachable or the package is not found, `packageName` remains undefined, preventing extraction failures while allowing other dependencies to proceed.
+
+## Lockfile Maintenance
+
+Renovate automatically updates sibling lockfiles when present:
+
+- `nimble.lock` (updating package version and `vcsRevision` commit digests)
+- `atlas.lock` (updating package version and `commit` digests)

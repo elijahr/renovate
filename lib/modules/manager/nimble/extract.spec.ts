@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   extractPackageFile,
   parseDependencyItem,
   parseRequiresItems,
 } from './extract.ts';
+import * as registry from './registry.ts';
+
+vi.mock('./registry.ts');
 
 describe('modules/manager/nimble/extract', () => {
   describe('parseRequiresItems', () => {
@@ -73,21 +76,36 @@ describe('modules/manager/nimble/extract', () => {
   });
 
   describe('extractPackageFile', () => {
-    it('returns null on empty content', () => {
-      expect(extractPackageFile('')).toBeNull();
+    it('returns null on empty content', async () => {
+      await expect(extractPackageFile('')).resolves.toBeNull();
     });
 
-    it('returns null when manifest has content but no dependencies', () => {
+    it('returns null when manifest has content but no dependencies', async () => {
       const content = `
 version     = "1.0.0"
 author      = "Someone"
 description = "A package with no deps"
 license     = "MIT"
       `;
-      expect(extractPackageFile(content)).toBeNull();
+      await expect(extractPackageFile(content)).resolves.toBeNull();
     });
 
-    it('extracts dependencies from real-world nimble manifest including bare packages', () => {
+    it('extracts dependencies from real-world nimble manifest including bare packages', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockImplementation(
+        (depName: string) => {
+          if (depName === 'nim') {
+            return Promise.resolve('https://github.com/nim-lang/Nim');
+          }
+          if (depName === 'zippy') {
+            return Promise.resolve('https://github.com/guzba/zippy');
+          }
+          if (depName === 'checksums') {
+            return Promise.resolve('https://github.com/nim-lang/checksums');
+          }
+          return Promise.resolve(undefined);
+        },
+      );
+
       const content = `
 # Package
 version       = "0.1.0"
@@ -105,24 +123,27 @@ task test, "Run tests":
   exec "nim c -r tests/test_all.nim"
       `;
 
-      const res = extractPackageFile(content);
+      const res = await extractPackageFile(content);
       expect(res).not.toBeNull();
       expect(res?.deps).toHaveLength(5);
 
       expect(res?.deps[0]).toMatchObject({
         depName: 'nim',
+        packageName: 'https://github.com/nim-lang/Nim',
         currentValue: '>= 2.0.0',
         depType: 'compiler',
       });
 
       expect(res?.deps[1]).toMatchObject({
         depName: 'zippy',
+        packageName: 'https://github.com/guzba/zippy',
         currentValue: '>= 0.10.4',
         depType: 'dependencies',
       });
 
       expect(res?.deps[2]).toMatchObject({
         depName: 'checksums',
+        packageName: 'https://github.com/nim-lang/checksums',
         currentValue: '>= 0.1.0',
         depType: 'dependencies',
       });
@@ -140,7 +161,9 @@ task test, "Run tests":
       });
     });
 
-    it('ignores requires inside task blocks and recovers on unindented line', () => {
+    it('ignores requires inside task blocks and recovers on unindented line', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockResolvedValue(undefined);
+
       const content = `
 version = "1.0.0"
 requires "nim >= 2.0.0"
@@ -152,35 +175,54 @@ task test, "Run tests":
 requires "zippy >= 0.10.4"
       `;
 
-      const res = extractPackageFile(content);
+      const res = await extractPackageFile(content);
       expect(res).not.toBeNull();
       expect(res?.deps).toHaveLength(2);
       expect(res?.deps[0].depName).toBe('nim');
       expect(res?.deps[1].depName).toBe('zippy');
     });
 
-    it('skips empty or whitespace-only items in requires declarations', () => {
+    it('skips empty or whitespace-only items in requires declarations', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockResolvedValue(undefined);
+
       const content = 'requires "", "   ", "[cli]", "zippy >= 0.10.4"';
-      const res = extractPackageFile(content);
+      const res = await extractPackageFile(content);
       expect(res?.deps).toHaveLength(1);
       expect(res?.deps[0].depName).toBe('zippy');
     });
 
-    it('ignores manifests inside nimbledeps, deps, and nimcache', () => {
+    it('ignores manifests inside nimbledeps, deps, and nimcache', async () => {
       const content = 'requires "zippy >= 0.10.4"';
-      expect(
+      await expect(
         extractPackageFile(content, 'nimbledeps/pkgs2/foo/foo.nimble'),
-      ).toBeNull();
-      expect(extractPackageFile(content, 'deps/foo/foo.nimble')).toBeNull();
-      expect(extractPackageFile(content, 'src/deps/foo/foo.nimble')).toBeNull();
-      expect(extractPackageFile(content, 'nimcache/foo.nimble')).toBeNull();
-      expect(extractPackageFile(content, '.nimcache/foo.nimble')).toBeNull();
-      expect(
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, 'deps/foo/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, 'src/deps/foo/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, 'nimcache/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, '.nimcache/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
         extractPackageFile(content, 'packages/foo/foo.nimble'),
-      ).not.toBeNull();
+      ).resolves.not.toBeNull();
     });
 
-    it('sets official repository for nim compiler and direct git URLs (https, http, git@)', () => {
+    it('sets official repository for nim compiler and direct git URLs (https, http, git@)', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockImplementation(
+        (depName: string) => {
+          if (depName === 'nim') {
+            return Promise.resolve('https://github.com/nim-lang/Nim');
+          }
+          return Promise.resolve(depName);
+        },
+      );
+
       const content = `
 requires "nim >= 2.0.0"
 requires "https://github.com/guzba/zippy >= 0.10.4"
@@ -188,7 +230,7 @@ requires "http://github.com/nim-lang/packages >= 1.0.0"
 requires "git@github.com:nim-lang/checksums.git >= 0.1.0"
 requires "https://github.com/nim-lang/trailing/"
       `;
-      const res = extractPackageFile(content, 'foo.nimble');
+      const res = await extractPackageFile(content, 'foo.nimble');
       expect(res?.deps).toHaveLength(5);
       expect(res?.deps[0]).toMatchObject({
         depName: 'nim',
@@ -213,13 +255,15 @@ requires "https://github.com/nim-lang/trailing/"
       });
     });
 
-    it('extracts multiline requires continuations and comma-separated items', () => {
+    it('extracts multiline requires continuations and comma-separated items', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockResolvedValue(undefined);
+
       const content = `
 requires "nim >= 2.0.0",
          "checksums >= 0.1.0",
          "zippy >= 0.10.0, jester >= 0.5.0"
       `;
-      const res = extractPackageFile(content, 'foo.nimble');
+      const res = await extractPackageFile(content, 'foo.nimble');
       expect(res?.deps).toHaveLength(4);
       expect(res?.deps.map((d) => d.depName)).toEqual([
         'nim',
