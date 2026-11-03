@@ -591,12 +591,16 @@ jobs:
 
       - name: Fail for failed or cancelled codecov
         if: |
-          needs.codecov.result == 'failure' ||
-          needs.codecov.result == 'cancelled'
+          github.repository == 'renovatebot/renovate' &&
+          (
+            needs.codecov.result == 'failure' ||
+            needs.codecov.result == 'cancelled'
+          )
         run: exit 1
 
       - name: Fail for skipped codecov when PR is ready for review
         if: |
+          github.repository == 'renovatebot/renovate' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.draft != true &&
           needs.codecov.result == 'skipped'
