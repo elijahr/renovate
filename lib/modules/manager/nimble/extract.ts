@@ -1,6 +1,7 @@
 import { regEx } from '../../../util/regex.ts';
 import { GitTagsDatasource } from '../../datasource/git-tags/index.ts';
 import type { PackageDependency, PackageFileContent } from '../types.ts';
+import { resolvePackageUrl } from './registry.ts';
 
 export function parseRequiresItems(rawLine: string): string[] {
   const items: string[] = [];
@@ -70,10 +71,10 @@ export function isIgnoredPath(packageFile?: string): boolean {
   );
 }
 
-export function extractPackageFile(
+export async function extractPackageFile(
   content: string,
   packageFile?: string,
-): PackageFileContent | null {
+): Promise<PackageFileContent | null> {
   if (!content || isIgnoredPath(packageFile)) {
     return null;
   }
@@ -117,23 +118,21 @@ export function extractPackageFile(
         }
 
         const isCompiler = depName.toLowerCase() === 'nim';
-        let packageName: string | undefined;
         let cleanName = depName;
 
-        if (isCompiler) {
-          packageName = 'https://github.com/nim-lang/Nim';
-        } else if (
+        if (
           depName.startsWith('https://') ||
           depName.startsWith('http://') ||
           depName.startsWith('git@')
         ) {
-          packageName = depName;
           const urlParts = depName.split('/');
           const lastPart = urlParts.at(-1)?.replace(regEx('\\.git$'), '');
           if (lastPart) {
             cleanName = lastPart;
           }
         }
+
+        const packageName = await resolvePackageUrl(depName, packageFile);
 
         const dep: PackageDependency = {
           depName: cleanName,
