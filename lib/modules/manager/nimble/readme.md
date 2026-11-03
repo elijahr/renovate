@@ -1,12 +1,10 @@
-# Nimble Manager for Renovate
-
 Renovate supports updating dependencies declared in [Nimble](https://github.com/nim-lang/nimble) package manifests (`*.nimble`).
 
-## File Matching
+### File Matching
 
 By default, Renovate scans for files matching `/(^|\/)[^/]+\.nimble$/`.
 
-## Supported Dependencies
+### Supported Dependencies
 
 Nimble manifests declare dependencies via `requires`:
 
@@ -26,7 +24,7 @@ Renovate extracts:
 - Multi-line continuation declarations
 - Compiler dependencies (`requires "nim >= 2.0.0"`)
 
-## Package Name & URL Resolution Hierarchy
+### Package Name & URL Resolution Hierarchy
 
 Because `.nimble` files typically specify bare package names (such as `"chronos"`), Renovate uses a multi-tier resolution pipeline to find canonical Git repository URLs:
 
@@ -34,7 +32,7 @@ Because `.nimble` files typically specify bare package names (such as `"chronos"
 2. **Official Nim Package Registry (Tier 2)**: Renovate queries the official Nim package registry (`https://raw.githubusercontent.com/nim-lang/packages/master/packages.json`) and caches results in `packageCache` for 24 hours under the `datasource-nimble-packages` namespace. Package aliases are resolved up to 3 hops with circular redirect protection.
 3. **Graceful Fallback (Tier 3)**: If the registry is unreachable or the package is not found, `packageName` remains undefined, preventing extraction failures while allowing other dependencies to proceed.
 
-## Lockfile Maintenance
+### Lockfile Maintenance
 
 Renovate automatically updates sibling lockfiles when present:
 
