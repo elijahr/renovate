@@ -51,10 +51,14 @@ export function parseDependencyItem(item: string): {
 }
 
 const IGNORED_PATH_SEGMENTS = [
-  '/nimbledeps/',
-  '/deps/',
-  '/nimcache/',
-  '/.nimcache/',
+  'nimbledeps',
+  'deps',
+  '_deps',
+  '.atlas',
+  '.nimble',
+  'nimcache',
+  '.nimcache',
+  'nimblecache',
 ];
 
 export function isIgnoredPath(packageFile?: string): boolean {
@@ -62,12 +66,12 @@ export function isIgnoredPath(packageFile?: string): boolean {
     return false;
   }
   const normalized = packageFile.replace(regEx('\\\\', 'g'), '/');
-  return (
-    IGNORED_PATH_SEGMENTS.some((seg) => normalized.includes(seg)) ||
-    normalized.startsWith('nimbledeps/') ||
-    normalized.startsWith('deps/') ||
-    normalized.startsWith('nimcache/') ||
-    normalized.startsWith('.nimcache/')
+  return IGNORED_PATH_SEGMENTS.some(
+    (seg) =>
+      normalized.includes(`/${seg}/`) ||
+      normalized.startsWith(`${seg}/`) ||
+      normalized.endsWith(`/${seg}`) ||
+      normalized === seg,
   );
 }
 

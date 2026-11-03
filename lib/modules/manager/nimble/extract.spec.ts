@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   extractPackageFile,
+  isIgnoredPath,
   parseDependencyItem,
   parseRequiresItems,
 } from './extract.ts';
@@ -72,6 +73,26 @@ describe('modules/manager/nimble/extract', () => {
         depName: '',
         currentValue: '',
       });
+    });
+  });
+
+  describe('isIgnoredPath', () => {
+    it('returns false when packageFile is undefined', () => {
+      expect(isIgnoredPath(undefined)).toBeFalse();
+    });
+
+    it('identifies ignored directory segments', () => {
+      expect(isIgnoredPath('nimbledeps/pkg/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('deps/pkg/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('_deps/pkg/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('.atlas/pkg/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('.nimble/pkgs/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('nimcache/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('.nimcache/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('nimblecache/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('nested/dir/nimblecache/pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('nested\\dir\\.atlas\\pkg.nimble')).toBeTrue();
+      expect(isIgnoredPath('src/packages/my_pkg.nimble')).toBeFalse();
     });
   });
 
@@ -191,7 +212,7 @@ requires "zippy >= 0.10.4"
       expect(res?.deps[0].depName).toBe('zippy');
     });
 
-    it('ignores manifests inside nimbledeps, deps, and nimcache', async () => {
+    it('ignores manifests inside nimbledeps, deps, _deps, .atlas, .nimble, and nimblecache', async () => {
       const content = 'requires "zippy >= 0.10.4"';
       await expect(
         extractPackageFile(content, 'nimbledeps/pkgs2/foo/foo.nimble'),
@@ -203,10 +224,22 @@ requires "zippy >= 0.10.4"
         extractPackageFile(content, 'src/deps/foo/foo.nimble'),
       ).resolves.toBeNull();
       await expect(
+        extractPackageFile(content, '_deps/foo/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, '.atlas/foo/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, '.nimble/foo/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
         extractPackageFile(content, 'nimcache/foo.nimble'),
       ).resolves.toBeNull();
       await expect(
         extractPackageFile(content, '.nimcache/foo.nimble'),
+      ).resolves.toBeNull();
+      await expect(
+        extractPackageFile(content, 'nimblecache/foo.nimble'),
       ).resolves.toBeNull();
       await expect(
         extractPackageFile(content, 'packages/foo/foo.nimble'),
