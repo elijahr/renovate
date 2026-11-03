@@ -453,7 +453,7 @@ jobs:
           done
 
       - name: Codecov Test
-        if: github.event_name != 'merge_group' && !cancelled()
+        if: github.repository == 'renovatebot/renovate' && github.event_name != 'merge_group' && !cancelled()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
@@ -487,7 +487,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    if: success() && github.event_name != 'merge_group' && github.event.pull_request.draft != true
+    if: github.repository == 'renovatebot/renovate' && success() && github.event_name != 'merge_group' && github.event.pull_request.draft != true
     permissions:
       id-token: write # required for codecov OIDC
 
