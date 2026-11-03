@@ -1,4 +1,5 @@
 import { isObject } from '@sindresorhus/is';
+import { z } from 'zod/v4';
 import { logger } from '../../../logger/index.ts';
 import * as packageCache from '../../../util/cache/package/index.ts';
 import { getSiblingFileName, readLocalFile } from '../../../util/fs/index.ts';
@@ -11,6 +12,16 @@ export const NIMBLE_PACKAGES_URL =
 export const CACHE_NAMESPACE = 'datasource-nimble-packages';
 export const CACHE_KEY = 'packages.json';
 export const CACHE_TTL_MINUTES = 24 * 60; // 24 hours
+
+export const NimblePackage = z
+  .object({
+    name: z.string().optional(),
+    url: z.string().optional(),
+    alias: z.string().optional(),
+  })
+  .passthrough();
+
+export const NimblePackages = z.array(NimblePackage);
 
 const http = new Http('nimble');
 
@@ -74,24 +85,20 @@ export async function getNimbleRegistry(): Promise<Map<string, string>> {
   }
 
   try {
-    const res = await http.getJson<NimblePackageEntry[]>(NIMBLE_PACKAGES_URL);
-    if (Array.isArray(res.body)) {
-      const map = parseNimbleRegistry(res.body);
-      try {
-        const record: Record<string, string> = Object.fromEntries(
-          map.entries(),
-        );
-        await packageCache.set(
-          CACHE_NAMESPACE,
-          CACHE_KEY,
-          record,
-          CACHE_TTL_MINUTES,
-        );
-      } catch (err) {
-        logger.trace({ err }, 'Failed to cache nimble packages');
-      }
-      return map;
+    const res = await http.getJson(NIMBLE_PACKAGES_URL, NimblePackages);
+    const map = parseNimbleRegistry(res.body);
+    try {
+      const record: Record<string, string> = Object.fromEntries(map.entries());
+      await packageCache.set(
+        CACHE_NAMESPACE,
+        CACHE_KEY,
+        record,
+        CACHE_TTL_MINUTES,
+      );
+    } catch (err) {
+      logger.trace({ err }, 'Failed to cache nimble packages');
     }
+    return map;
   } catch (err) {
     logger.debug({ err }, 'Failed to fetch nimble packages registry');
   }
