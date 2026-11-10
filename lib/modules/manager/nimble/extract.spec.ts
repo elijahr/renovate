@@ -305,5 +305,116 @@ requires "nim >= 2.0.0",
         'jester',
       ]);
     });
+
+    it('extracts taskRequires dependencies with depType taskRequires', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockImplementation(
+        (depName: string) => {
+          if (depName === 'chronos') {
+            return Promise.resolve('https://github.com/status-im/nim-chronos');
+          }
+          if (depName === 'stew') {
+            return Promise.resolve('https://github.com/status-im/nim-stew');
+          }
+          if (depName === 'criterion') {
+            return Promise.resolve('https://github.com/cblp/nim-criterion.git');
+          }
+          return Promise.resolve(undefined);
+        },
+      );
+
+      const content = `
+version = "0.1.0"
+
+# Main dependencies
+requires "nim >= 2.0.0"
+
+# Task requirements (quoted task name, single and multiple)
+taskRequires "test", "chronos >= 4.2.2"
+taskRequires "bench", "criterion >= 0.2.0", "stew >= 0.1.0"
+taskRequires baretask, "chronos >= 4.2.0"
+
+task test, "Run tests":
+  taskRequires "test", "stew#head"
+  exec "nim c -r test"
+      `;
+
+      const res = await extractPackageFile(content, 'my_pkg.nimble');
+      expect(res).not.toBeNull();
+      expect(res?.deps).toHaveLength(6);
+
+      // Main dep
+      expect(res?.deps[0]).toMatchObject({
+        depName: 'nim',
+        depType: 'compiler',
+      });
+
+      // taskRequires "test", "chronos >= 4.2.2"
+      expect(res?.deps[1]).toMatchObject({
+        depName: 'chronos',
+        packageName: 'https://github.com/status-im/nim-chronos',
+        currentValue: '>= 4.2.2',
+        depType: 'taskRequires',
+        replaceString: 'chronos >= 4.2.2',
+      });
+
+      // taskRequires "bench", "criterion >= 0.2.0", "stew >= 0.1.0"
+      expect(res?.deps[2]).toMatchObject({
+        depName: 'criterion',
+        packageName: 'https://github.com/cblp/nim-criterion.git',
+        currentValue: '>= 0.2.0',
+        depType: 'taskRequires',
+        replaceString: 'criterion >= 0.2.0',
+      });
+
+      expect(res?.deps[3]).toMatchObject({
+        depName: 'stew',
+        packageName: 'https://github.com/status-im/nim-stew',
+        currentValue: '>= 0.1.0',
+        depType: 'taskRequires',
+        replaceString: 'stew >= 0.1.0',
+      });
+
+      // taskRequires baretask, "chronos >= 4.2.0"
+      expect(res?.deps[4]).toMatchObject({
+        depName: 'chronos',
+        packageName: 'https://github.com/status-im/nim-chronos',
+        currentValue: '>= 4.2.0',
+        depType: 'taskRequires',
+        replaceString: 'chronos >= 4.2.0',
+      });
+
+      // Inside task block: taskRequires "test", "stew#head"
+      expect(res?.deps[5]).toMatchObject({
+        depName: 'stew',
+        packageName: 'https://github.com/status-im/nim-stew',
+        currentValue: '#head',
+        depType: 'taskRequires',
+        replaceString: 'stew#head',
+      });
+    });
+
+    it('handles multiline taskRequires continuations and skips empty items', async () => {
+      vi.mocked(registry.resolvePackageUrl).mockResolvedValue(undefined);
+
+      const content = `
+taskRequires "test",
+  "chronos >= 4.2.2",
+  "[testflags]",
+  "stew >= 0.1.0"
+      `;
+
+      const res = await extractPackageFile(content, 'foo.nimble');
+      expect(res?.deps).toHaveLength(2);
+      expect(res?.deps[0]).toMatchObject({
+        depName: 'chronos',
+        currentValue: '>= 4.2.2',
+        depType: 'taskRequires',
+      });
+      expect(res?.deps[1]).toMatchObject({
+        depName: 'stew',
+        currentValue: '>= 0.1.0',
+        depType: 'taskRequires',
+      });
+    });
   });
 });

@@ -75,6 +75,50 @@ export function isIgnoredPath(packageFile?: string): boolean {
   );
 }
 
+async function createPackageDependency(
+  item: string,
+  depType: string,
+  packageFile?: string,
+): Promise<PackageDependency | null> {
+  const { depName, currentValue } = parseDependencyItem(item);
+  if (!depName) {
+    return null;
+  }
+
+  const isCompiler = depName.toLowerCase() === 'nim';
+  let cleanName = depName;
+
+  if (
+    depName.startsWith('https://') ||
+    depName.startsWith('http://') ||
+    depName.startsWith('git@')
+  ) {
+    const urlParts = depName.split('/');
+    const lastPart = urlParts.at(-1)?.replace(regEx('\\.git$'), '');
+    if (lastPart) {
+      cleanName = lastPart;
+    }
+  }
+
+  let finalDepType = 'dependencies';
+  if (depType === 'taskRequires') {
+    finalDepType = 'taskRequires';
+  } else if (isCompiler) {
+    finalDepType = 'compiler';
+  }
+
+  const packageName = await resolvePackageUrl(depName, packageFile);
+
+  return {
+    depName: cleanName,
+    packageName,
+    currentValue: currentValue || undefined,
+    datasource: GitTagsDatasource.id,
+    depType: finalDepType,
+    replaceString: item,
+  };
+}
+
 export async function extractPackageFile(
   content: string,
   packageFile?: string,
@@ -87,9 +131,44 @@ export async function extractPackageFile(
   const lines = content.split(regEx('\\r?\\n'));
   let inTaskBlock = false;
   let inRequiresContinuation = false;
+  let inTaskRequiresContinuation = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Ignore commented lines
+    if (trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const isTaskRequires = regEx('^taskRequires\\s+').test(trimmed);
+    if (isTaskRequires || inTaskRequiresContinuation) {
+      let items: string[] = [];
+      if (isTaskRequires) {
+        const taskReqMatch = regEx(
+          '^taskRequires\\s+(?:["\'](?<taskNameQuoted>[^"\']+)["\']|(?<taskNameBare>[a-zA-Z0-9_]+))\\s*(?:,\\s*(?<deps>.*))?$',
+        ).exec(trimmed);
+        const depsStr = taskReqMatch?.groups?.deps;
+        if (depsStr) {
+          items = parseRequiresItems(depsStr);
+        }
+      } else {
+        items = parseRequiresItems(line);
+      }
+
+      for (const item of items) {
+        const dep = await createPackageDependency(
+          item,
+          'taskRequires',
+          packageFile,
+        );
+        if (dep) {
+          deps.push(dep);
+        }
+      }
+      inTaskRequiresContinuation = trimmed.endsWith(',');
+      continue;
+    }
 
     // Check if line begins or exits a task block
     if (regEx('^task\\s+[a-zA-Z0-9_]+').test(trimmed)) {
@@ -107,47 +186,18 @@ export async function extractPackageFile(
       continue;
     }
 
-    // Ignore commented lines
-    if (trimmed.startsWith('#')) {
-      continue;
-    }
-
     const isRequires = regEx('^requires\\s+').test(trimmed);
     if (isRequires || inRequiresContinuation) {
       const items = parseRequiresItems(line);
       for (const item of items) {
-        const { depName, currentValue } = parseDependencyItem(item);
-        if (!depName) {
-          continue;
+        const dep = await createPackageDependency(
+          item,
+          'dependencies',
+          packageFile,
+        );
+        if (dep) {
+          deps.push(dep);
         }
-
-        const isCompiler = depName.toLowerCase() === 'nim';
-        let cleanName = depName;
-
-        if (
-          depName.startsWith('https://') ||
-          depName.startsWith('http://') ||
-          depName.startsWith('git@')
-        ) {
-          const urlParts = depName.split('/');
-          const lastPart = urlParts.at(-1)?.replace(regEx('\\.git$'), '');
-          if (lastPart) {
-            cleanName = lastPart;
-          }
-        }
-
-        const packageName = await resolvePackageUrl(depName, packageFile);
-
-        const dep: PackageDependency = {
-          depName: cleanName,
-          packageName,
-          currentValue: currentValue || undefined,
-          datasource: GitTagsDatasource.id,
-          depType: isCompiler ? 'compiler' : 'dependencies',
-          replaceString: item,
-        };
-
-        deps.push(dep);
       }
       inRequiresContinuation = trimmed.endsWith(',');
     }

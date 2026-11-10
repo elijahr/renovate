@@ -157,4 +157,76 @@ requires "checksums >= 0.1.0"
 
     expect(res).toBe('# requires "zippy >= 0.11.0"');
   });
+
+  it('strips leading v/V from newValue to prevent invalid requirement strings', () => {
+    const fileContent = 'requires "zippy >= 0.10.4"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: 'v0.14.1',
+      replaceString: 'zippy >= 0.10.4',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('requires "zippy >= 0.14.1"');
+  });
+
+  it('strips leading V with uppercase from newValue', () => {
+    const fileContent = 'requires "chronos >= 4.2.0"';
+    const upgrade: Upgrade = {
+      depName: 'chronos',
+      currentValue: '>= 4.2.0',
+      newValue: 'V4.3.0',
+      replaceString: 'chronos >= 4.2.0',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('requires "chronos >= 4.3.0"');
+  });
+
+  it('strips leading v when newValue includes comparison operator', () => {
+    const fileContent = 'requires "zippy >= 0.10.4"';
+    const upgrade: Upgrade = {
+      depName: 'zippy',
+      currentValue: '>= 0.10.4',
+      newValue: '>= v0.14.1',
+      replaceString: 'zippy >= 0.10.4',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('requires "zippy >= 0.14.1"');
+  });
+
+  it('updates taskRequires declarations and strips leading v', () => {
+    const fileContent = 'taskRequires "test", "chronos >= 4.2.2"';
+    const upgrade: Upgrade = {
+      depName: 'chronos',
+      currentValue: '>= 4.2.2',
+      newValue: 'v4.3.0',
+      replaceString: 'chronos >= 4.2.2',
+    };
+
+    const res = updateDependency({
+      fileContent,
+      packageFile: 'sample.nimble',
+      upgrade,
+    });
+
+    expect(res).toBe('taskRequires "test", "chronos >= 4.3.0"');
+  });
 });

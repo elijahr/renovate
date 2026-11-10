@@ -10,21 +10,25 @@ export function updateDependency({
     return fileContent;
   }
 
+  const cleanVersion = newValue
+    .replace(regEx('^([><=!~^&]+\\s*)v([0-9])', 'i'), '$1$2')
+    .replace(regEx('^v([0-9])', 'i'), '$1');
+
   if (replaceString && fileContent.includes(replaceString)) {
     let updatedItem: string;
     if (currentValue && replaceString.includes(currentValue)) {
       // Preserve comparison operator if newValue doesn't specify one
       const opMatch = regEx('^(?<op>[><=!~^&]+\\s*)').exec(currentValue);
-      if (opMatch?.groups?.op && !regEx('^[><=!~^&]').test(newValue)) {
+      if (opMatch?.groups?.op && !regEx('^[><=!~^&]').test(cleanVersion)) {
         updatedItem = replaceString.replace(
           currentValue,
-          `${opMatch.groups.op}${newValue}`,
+          `${opMatch.groups.op}${cleanVersion}`,
         );
       } else {
-        updatedItem = replaceString.replace(currentValue, newValue);
+        updatedItem = replaceString.replace(currentValue, cleanVersion);
       }
     } else {
-      updatedItem = `${depName} >= ${newValue}`;
+      updatedItem = `${depName} >= ${cleanVersion}`;
     }
 
     const lines = fileContent.split(regEx('\\r?\\n'));
@@ -53,10 +57,10 @@ export function updateDependency({
   return fileContent
     .replace(
       regEx(`"${depName}(?:\\s+[^"]*)?"`, 'g'),
-      `"${depName} >= ${newValue}"`,
+      `"${depName} >= ${cleanVersion}"`,
     )
     .replace(
       regEx(`'${depName}(?:\\s+[^']*)?'`, 'g'),
-      `'${depName} >= ${newValue}'`,
+      `'${depName} >= ${cleanVersion}'`,
     );
 }
