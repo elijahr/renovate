@@ -47,7 +47,6 @@ jobs:
 
       - name: Generate GitHub App Token
         id: app-token
-        if: ${{ secrets.RENOVATE_APP_ID != '' && secrets.RENOVATE_APP_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@21cf961a5350b6e619804b31f7954d52d43765ee # v1.11.0
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
