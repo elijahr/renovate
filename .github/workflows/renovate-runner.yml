@@ -21,14 +21,13 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: renovate-runner-${{ matrix.owner }}
-  cancel-in-progress: false
-
 jobs:
   renovate:
     name: Run Renovate (${{ matrix.owner }})
     runs-on: ubuntu-latest
+    concurrency:
+      group: renovate-runner-${{ matrix.owner }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
