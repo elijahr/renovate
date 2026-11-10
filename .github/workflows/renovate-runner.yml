@@ -22,20 +22,40 @@ permissions:
   contents: read
 
 concurrency:
-  group: renovate-runner
+  group: renovate-runner-${{ matrix.owner }}
   cancel-in-progress: false
 
 jobs:
   renovate:
-    name: Run Renovate Nimble
+    name: Run Renovate (${{ matrix.owner }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: [elijahr, axiomantic]
     steps:
+      - name: Check whether to run for this owner
+        id: check-owner
+        run: |
+          TARGET="${{ inputs.repo_filter }}"
+          OWNER="${{ matrix.owner }}"
+          if [ -n "$TARGET" ]; then
+            if [[ "$TARGET" == *"/"* ]] && [[ "$TARGET" != "$OWNER/*" ]] && [[ "$TARGET" != "$OWNER/"* ]]; then
+              echo "Target '$TARGET' does not belong to owner '$OWNER'; skipping matrix arm."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Checkout elijahr/renovate
+        if: steps.check-owner.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Node.js & dependencies
+        if: steps.check-owner.outputs.skip != 'true'
         uses: ./.github/actions/setup-node
         with:
           node-version: 24
@@ -43,22 +63,26 @@ jobs:
           save-cache: true
 
       - name: Compile Renovate
+        if: steps.check-owner.outputs.skip != 'true'
         run: pnpm compile:ts
 
       - name: Generate GitHub App Token
+        if: steps.check-owner.outputs.skip != 'true'
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          owner: ${{ matrix.owner }}
 
       - name: Execute Renovate Runner
+        if: steps.check-owner.outputs.skip != 'true'
         env:
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token || secrets.RENOVATE_TOKEN || github.token }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPO_FILTER: ${{ inputs.repo_filter }}
+          TARGET_OWNER: ${{ matrix.owner }}
         run: |
           ARGS=()
           if [ -n "$DRY_RUN" ]; then
@@ -74,6 +98,6 @@ jobs:
               node dist/renovate.js "${ARGS[@]}" "$REPO_FILTER"
             fi
           else
-            # Default: run against configured repos
-            node dist/renovate.js "${ARGS[@]}" --autodiscover=true --autodiscover-filter="elijahr/*,axiomantic/*"
+            # Default: autodiscover all repos installed under this owner
+            node dist/renovate.js "${ARGS[@]}" --autodiscover=true --autodiscover-filter="$TARGET_OWNER/*"
           fi
