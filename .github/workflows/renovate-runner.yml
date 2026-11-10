@@ -45,9 +45,18 @@ jobs:
       - name: Compile Renovate
         run: pnpm compile:ts
 
+      - name: Generate GitHub App Token
+        id: app-token
+        if: ${{ secrets.RENOVATE_APP_ID != '' && secrets.RENOVATE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@21cf961a5350b6e619804b31f7954d52d43765ee # v1.11.0
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Execute Renovate Runner
         env:
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN || github.token }}
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token || secrets.RENOVATE_TOKEN || github.token }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPO_FILTER: ${{ inputs.repo_filter }}
@@ -56,6 +65,7 @@ jobs:
           if [ -n "$DRY_RUN" ]; then
             ARGS+=(--dry-run="$DRY_RUN")
           fi
+          ARGS+=(--pr-hourly-limit=0)
 
           if [ -n "$REPO_FILTER" ]; then
             if [[ "$REPO_FILTER" == *"*"* ]]; then
